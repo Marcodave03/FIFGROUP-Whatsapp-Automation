@@ -1,0 +1,131 @@
+// Import required dependencies
+const express = require("express");
+const line = require("@line/bot-sdk");
+const fs = require("fs");
+const path = require("path");
+const axios = require("axios");
+require("dotenv").config(); // To load environment variables from a .env file
+
+// Initialize the express application
+const app = express();
+
+// LINE Bot Configuration
+const config = {
+  channelAccessToken: process.env.token, // Your LINE bot's channel access token
+  channelSecret: process.env.secretcode, // Your LINE bot's channel secret
+};
+
+// OpenAI API Configuration
+const OPENAI_API_KEY = process.env.openAI;
+const openaiEndpoint = "https://api.openai.com/v1/chat/completions";
+
+// Initialize the LINE client
+const client = new line.Client(config);
+
+// Use JSON middleware to parse incoming requests
+app.use(express.json());
+
+// Function to interact with OpenAI API
+async function sendToOpenAI(prompt) {
+  try {
+
+    //khusus alvin
+    if (prompt.toLowerCase().includes("alvin") || prompt.toLowerCase().includes("chris")) {
+      return "I don't know this guy.";
+    }
+
+    const context = `
+      You are an informational chatbot for Binus English Club (BNEC) always speak in english. 
+      Here is the reference information you should always rely on while answering questions:
+    `;
+    const response = await axios.post(
+      openaiEndpoint,
+      {
+        model: "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: context },
+          { role: "user", content: prompt }
+        ],
+        max_tokens: 150,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+      }
+    );
+    return response.data.choices[0].message.content.trim();
+  } catch (error) {
+    console.error("Error communicating with OpenAI:", error.message);
+    return "I'm sorry, something went wrong with OpenAI. Please try again later.";
+  }
+}
+
+// Ensure directory for user logs exists
+const userLogsDir = path.join(__dirname, "user_logs");
+if (!fs.existsSync(userLogsDir)) {
+  fs.mkdirSync(userLogsDir);
+}
+
+// Webhook endpoint for receiving events from LINE
+app.post(
+  "/webhook",
+  (req, res, next) => {
+    req.body = JSON.stringify(req.body); // Stringify the request body for middleware validation
+    line.middleware(config)(req, res, next);
+  },
+  async (req, res) => {
+    try {
+      const events = req.body.events;
+      await Promise.all(events.map(handleEvents)); // Handle all incoming events
+      res.status(200).end(); // Respond with HTTP 200 OK
+    } catch (err) {
+      console.error("Error handling webhook:", err);
+      res.status(500).end(); // Respond with HTTP 500 Internal Server Error
+    }
+  }
+);
+
+// Event handling function
+async function handleEvents(event) {
+  if (event.type === "message" && event.message.type === "text") {
+    const userId = event.source.userId; // Unique ID for each user
+    const messageText = event.message.text; // User's message text
+
+    // Create or append to the user's log file
+    const userFile = path.join(userLogsDir, `${userId}.txt`);
+    const logEntry = `User: ${messageText}\n`;
+
+    fs.appendFile(userFile, logEntry, (err) => {
+      if (err) console.error("Error writing to user log file:", err);
+    });
+
+    // Send the user's message to OpenAI and get a response
+    const openAIResponse = await sendToOpenAI(messageText);
+
+    // Log the OpenAI response to the same file
+    const responseLogEntry = `Bot: ${openAIResponse}\n\n`;
+    fs.appendFile(userFile, responseLogEntry, (err) => {
+      if (err) console.error("Error writing bot response to file:", err);
+    });
+
+    // Reply to the user with OpenAI's response
+    return client.replyMessage(event.replyToken, {
+      type: "text",
+      text: openAIResponse,
+    });
+  }
+  return Promise.resolve(null); // Ignore non-text or other event types
+}
+
+// Test endpoint to confirm the server is running
+app.get("/", (req, res) => {
+  res.send("Server is running!");
+});
+
+// Start the Express server on the specified port
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
