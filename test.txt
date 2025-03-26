@@ -1,0 +1,121 @@
+// Import required dependencies
+const express = require("express");
+const line = require("@line/bot-sdk");
+require("dotenv").config();  // To load environment variables from a .env file
+const readline = require("readline");
+const axios = require("axios");
+
+// Initialize the express application
+const app = express();
+
+// LINE Bot Configuration
+const config = {
+  channelAccessToken: process.env.token, // Your LINE bot's channel access token
+  channelSecret: process.env.secretcode, // Your LINE bot's channel secret
+};
+
+// Initialize the LINE client
+const client = new line.Client(config);
+
+// Use JSON middleware to parse incoming requests
+app.use(express.json());
+
+// Endpoint to send a message (equivalent to what you're doing in Postman)
+app.post("/send-message", async (req, res) => {
+  const { to, messages } = req.body;
+
+  if (!to || !messages) {
+    return res.status(400).json({ error: "Missing 'to' or 'messages' in body" });
+  }
+
+  try {
+    const response = await client.pushMessage(to, messages); // Send the message using LINE API
+    console.log("Message sent successfully:", response);
+    res.status(200).json({ success: true, response });
+  } catch (err) {
+    console.error("Error sending message:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Webhook endpoint for receiving events (from LINE)
+app.post("/webhook", line.middleware(config), async (req, res) => {
+  try {
+    const events = req.body.events;
+    await Promise.all(events.map(handleEvents)); // Handle incoming events
+    res.status(200).end(); // Respond with HTTP 200 OK
+  } catch (err) {
+    console.error("Error handling webhook:", err);
+    res.status(500).end(); // Respond with HTTP 500 Internal Server Error
+  }
+});
+
+// Event handling function
+async function handleEvents(event) {
+  if (event.type === "message" && event.message.type === "text") {
+    console.log("Received message:", event.message.text);
+
+    // Reply to the user with a message
+    return client.replyMessage(event.replyToken, [
+      {
+        type: "text",
+        text: `You said: ${event.message.text}`,
+      },
+    ]);
+  }
+  return Promise.resolve(null); // Ignore non-text or other event types
+}
+
+// Test endpoint to confirm server is running
+app.get("/", (req, res) => {
+  res.send("Server is running");
+});
+
+// Start the Express server on the specified port (defaults to 3001)
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+// ----- Terminal Input Section -----
+
+// Create a readline interface to get user input in terminal
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
+
+// Fixed recipient ID (you provided this)
+const recipientId = "U6ff9ea78a7f881319ffd321041a047e1";  // Change this to the recipient's LINE user ID
+
+// Function to prompt the user for input in the terminal
+const getInput = () => {
+  rl.question("Enter the message: ", (messageText) => {
+    if (!messageText) {
+      console.log("Message cannot be empty. Please try again.");
+      getInput(); // Prompt again if the message is empty
+      return;
+    }
+
+    // Construct the message object to send
+    const message = {
+      type: "text",
+      text: messageText,
+    };
+
+    // Send the message using the Express /send-message endpoint
+    axios
+      .post("http://localhost:3001/send-message", { to: recipientId, messages: [message] })
+      .then((response) => {
+        console.log("Message sent successfully:", response.data);
+        rl.close(); // Close the readline interface after sending the message
+      })
+      .catch((error) => {
+        console.error("Error sending message:", error.message);
+        rl.close(); // Close the readline interface on error
+      });
+  });
+};
+
+// Start the terminal input process
+getInput();
