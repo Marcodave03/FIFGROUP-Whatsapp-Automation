@@ -355,9 +355,9 @@ async function sendToOpenAI(prompt) {
 }
 
 // Ensure directory for user logs exists
-const userLogsDir = path.join(__dirname, "user_logs");
+const userLogsDir = "/tmp/user_logs"; // ✅ safe temp directory
 if (!fs.existsSync(userLogsDir)) {
-  fs.mkdirSync(userLogsDir);
+  fs.mkdirSync(userLogsDir, { recursive: true });
 }
 
 // Webhook endpoint for receiving events from LINE
