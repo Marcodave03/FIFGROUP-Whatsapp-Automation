@@ -242,7 +242,12 @@ app.get("/", (req, res) => {
 });
 
 // Start the Express server on the specified port
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// const PORT = process.env.PORT || 3001;
+// app.listen(PORT, () => {
+//   console.log(`Server is running on port ${PORT}`);
+// });
+
+//backend deployment
+module.exports = (req, res) => {
+  app(req, res); // ✅ This is correct for Vercel
+};
