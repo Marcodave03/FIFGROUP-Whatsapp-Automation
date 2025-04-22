@@ -532,5 +532,5 @@ app.get("/", (req, res) => {
 
 //backend deployment
 module.exports = (req, res) => {
-  app(req, res).send('Hello from Vercel!'); // ✅ This is correct for Vercel
+  app(req, res); // ✅ Let Express handle everything
 };
