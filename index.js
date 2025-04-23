@@ -25,6 +25,9 @@ const client = new line.Client(config);
 
 // Use JSON middleware to parse incoming requests
 app.use(express.json());
+// ✅ Expose local image folder to web
+app.use('/image', express.static(path.join(__dirname, 'image')));
+
 
 const keywordResponses = {
   FIFASTRA: {
@@ -184,6 +187,22 @@ const keywordResponses = {
   },
 };
 
+// ✅ [NEW] Map text keywords to image filenames
+const imageKeywordMap = {
+  "ask fin": "AskFin.jpg",
+  "ask finatra": "AskFinatra.png",
+  "finatra group": "FinatraGroup.png",
+  "keunggulan sektor": "KeunggulanTargetSektor.png",
+  "kompetitor": "PerbandinganKompetitor.png",
+  "portofolio kota": "PortofolioKota.png",
+  "portofolio sektor": "PortofolioPersebaranSektor.png",
+  "detail produk": "ProductDetail.png",
+  "program": "Program.png",
+  "proses bisnis": "ProsesBisnisSyarat.png",
+  "visi misi": "VisiMisiPencapaianPosisi.png"
+};
+
+
 // Function to interact with OpenAI API
 async function sendToOpenAI(prompt) {
   try {
@@ -280,14 +299,6 @@ async function sendToOpenAI(prompt) {
 
     // SEKTOR Finatra
     - Persebaran sektor finatra berupa hotel, pedagang besar dan ritel, pertanian, peternakan, perumahan, transportasi dan pergudangan. untuk lebih lengkapnya ketik "sector list"
-
-
-
-
-
-
-
-
     
     //STRUKTUR ORGANISASI
     - **Manajemen FIF Group**: Tim eksekutif yang mengelola dan mengembangkan bisnis FIF Group.
@@ -440,77 +451,39 @@ app.post(
 async function handleEvents(event) {
   if (event.type === "message" && event.message.type === "text") {
     const userId = event.source.userId;
-    const messageText = event.message.text.toUpperCase(); // Ensure this is declared before use
+    const messageText = event.message.text.trim().toLowerCase();
 
     const userFile = path.join(userLogsDir, `${userId}.txt`);
-    const logEntry = `User: ${messageText}\n`;
-
-    fs.appendFile(userFile, logEntry, (err) => {
+    fs.appendFile(userFile, `User: ${messageText}\n`, (err) => {
       if (err) console.error("Error writing to user log:", err);
     });
 
-    // Check if the message matches a predefined keyword
-    if (keywordResponses[messageText]) {
-      const response = keywordResponses[messageText];
+    // ✅ [NEW] Check if message matches keyword in imageKeywordMap
+    if (imageKeywordMap[messageText]) {
+      const filename = imageKeywordMap[messageText];
+      const imageUrl = `https://fifgroup-whatsapp-automation.vercel.app/image/${filename}`;
 
-      await client.replyMessage(event.replyToken, [
-        {
-          type: "text",
-          text: `${response.title}\n${response.text}`,
-        },
-        {
-          type: "sticker",
-          packageId: "446",
-          stickerId: "1988",
-        },
-        {
-          type: "location",
-          title: "my location",
-          address: "1-3 Kioicho, Chiyoda-ku, Tokyo, 102-8282, Japan",
-          latitude: 35.67966,
-          longitude: 139.73669,
-        },
-        {
-          type: "template",
-          altText: "This is a buttons template",
-          template: {
-            type: "buttons",
-            thumbnailImageUrl: "https://example.com/bot/images/image.jpg",
-            imageAspectRatio: "rectangle",
-            imageSize: "cover",
-            imageBackgroundColor: "#FFFFFF",
-            title: "Menu",
-            text: "Please select",
-            defaultAction: {
-              type: "uri",
-              label: "View detail",
-              uri: "http://example.com/page/123",
-            },
-            actions: [
-              {
-                type: "postback",
-                label: "Buy",
-                data: "action=buy&itemid=123",
-              },
-              {
-                type: "postback",
-                label: "Add to cart",
-                data: "action=add&itemid=123",
-              },
-              {
-                type: "uri",
-                label: "View detail",
-                uri: "http://example.com/page/123",
-              },
-            ],
-          },
-        },
-      ]);
+      await client.replyMessage(event.replyToken, {
+        type: "image",
+        originalContentUrl: imageUrl,
+        previewImageUrl: imageUrl
+      });
 
+      return; // ✅ Skip GPT or other logic
+    }
+
+    // ✅ Existing keyword response logic
+    const upperCaseMessage = messageText.toUpperCase();
+    if (keywordResponses[upperCaseMessage]) {
+      const response = keywordResponses[upperCaseMessage];
+      await client.replyMessage(event.replyToken, {
+        type: "text",
+        text: `${response.title}\n${response.text}`
+      });
       return;
     }
 
-    // If keyword is not found, send to OpenAI
+    // ✅ Fallback to GPT
     const aiResponse = await sendToOpenAI(messageText);
     await client.replyMessage(event.replyToken, {
       type: "text",
@@ -519,16 +492,11 @@ async function handleEvents(event) {
   }
 }
 
+
 // Test endpoint to confirm the server is running
 app.get("/", (req, res) => {
   res.send("Server is running!");
 });
-
-// Start the Express server on the specified port
-// const PORT = process.env.PORT || 3001;
-// app.listen(PORT, () => {
-//   console.log(`Server is running on port ${PORT}`);
-// });
 
 //backend deployment
 module.exports = (req, res) => {
