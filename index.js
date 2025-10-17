@@ -210,6 +210,19 @@ app.post("/webhook/metland", line.middleware(configMetland), async (req, res) =>
   }
 });
 
+
+
+app.get("/debug/image", (req, res) => {
+  const name = req.query.name;
+  if (!name) return res.status(400).send("Pass ?name=<TENANT NAME>");
+  const { resolveTenantImageUrl } = require("./data/metland_images");
+  const url = resolveTenantImageUrl(req, String(name));
+  if (!url) return res.status(404).send("Not in RAW_MAP: " + name);
+  res.send(`Resolved URL:<br><a href="${url}" target="_blank">${url}</a><br><img src="${url}" style="max-width:360px">`);
+});
+
+
+
 // --------- Export for serverless (Vercel/Cloud Functions) ---------
 module.exports = (req, res) => {
   app(req, res);

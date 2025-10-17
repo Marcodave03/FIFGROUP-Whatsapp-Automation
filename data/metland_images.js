@@ -1,7 +1,7 @@
 // data/metland_images.js
-// Map from tenant name -> preferred asset path (your original list),
-// and a resolver that prefers /assets/metland/<NAME>.png if present.
+// Use EXACT paths from RAW_MAP (no PNG generalization)
 
+// 1) Your mapping (keep it exactly as your files under /public)
 const RAW_MAP = {
   "AZKO": "/assets/metland/AZKO.png",
   "AFRO": "/assets/metland/AFRO.png",
@@ -16,11 +16,13 @@ const RAW_MAP = {
   "ATM DANAMON": "/assets/metland/ATM-DANAMON.png",
   "ATM MEGA": "/assets/metland/ATM-MEGA.png",
   "ATM OCBC NISP": "/assets/metland/ATM-OCBC-NISP.png",
-  "ATM PANIN": "/assets/metland/ATM -ANIN.png",
+  // NOTE: Your original had "ATM -ANIN.png" (space/typo). Ensure the filename really exists:
+  "ATM PANIN": "/assets/metland/ATM-PANIN.png",
   "AUTO GLAZE": "/assets/metland/AUTO-GLAZE.png",
   // "ADIDAS": "/assets/metland/ADIDAS.png",
   "BANK MANDIRI": "/assets/metland/BANK-MANDIRI.png",
-  "BASKIN ROBBINS": "/assets/metland/BASKIN-ROBINS.png",
+  // Ensure your real file name matches spelling:
+  "BASKIN ROBBINS": "/assets/metland/BASKIN-ROBBINS.png",
   "BASO A FUNG": "/assets/metland/BAKSO-A-FUNG.png",
   "BATA": "/assets/metland/BATA.png",
   "BATIK KERIS": "/assets/metland/BATIK-KERIS.png",
@@ -167,51 +169,53 @@ const RAW_MAP = {
   // "THE PIER": "/assets/metland/THE PIER.jpg",
   "UNIQLO": "/assets/metland/UNIQLO.jpg",
   "URBAN & CO": "/assets/metland/URBAN&CO.jpg",
-  "WACOOL": "/assets/metland/WACOAL.jpg",
+  "WACOOL": "/assets/metland/WACOAL.jpg", // make sure this name matches your real file
   "WATSONS": "/assets/metland/WATSONS.jpg",
   "XIAOMI STORE": "/assets/metland/XIAOMI-STORE.jpg",
   "YAKINIKU LIKE": "/assets/metland/YAKINIKU-LIKE.jpeg",
   "YAMAHA SMILE MUSIC": "/assets/metland/YAMAHA-SMILE-MUSIC.jpg",
-  "YOSHINOYA": "/assets/metland/YOSHINOYA.jpg",
+  "YOSHINOYA": "/assets/metland/YOSHINOYA.png",
   "ZENBU": "/assets/metland/ZENBU.jpg"
 };
 
-// Preferred rule you asked: use /assets/metland/<KEY>.png straight.
-function toPreferredPath(key) {
-  return `/assets/metland/${key}.png`;
+// 2) Optional: fix common model outputs → your canonical keys
+const FIXUPS = {
+  "JCO DONUT & COFFEE": "JCO DONUT&COFFEE",
+  "J.CO DONUT & COFFEE": "JCO DONUT&COFFEE",
+  "J.CO DONUT&COFFEE": "JCO DONUT&COFFEE",
+  "FUN WORLD BOWLING": "FUNWORLD BOWLING",
+  "ATM-PANIN": "ATM PANIN",
+  "BASKIN-ROBBINS": "BASKIN ROBBINS"
+};
+
+function normalizeKey(key) {
+  if (!key) return key;
+  const k = key.trim();
+  return FIXUPS[k] || k;
 }
 
-// Build absolute URL from request + relative asset path
+// 3) Build absolute HTTPS URL (Vercel public assets)
 function toAbsoluteUrl(req, relPath) {
-  const proto = (req.headers["x-forwarded-proto"] || "https");
+  const proto = req.headers["x-forwarded-proto"] || "https";
   const host  = req.headers["x-forwarded-host"] || req.headers.host;
-  // Encode only the path portion safely (preserve slashes)
-  const parts = relPath.split("/").map((p) => encodeURIComponent(p).replace(/%2F/gi, "/"));
-  // Fix leading slash double-encoding
-  let enc = parts.join("/").replace(/^%2F/, "");
-  if (!enc.startsWith("/")) enc = "/" + enc;
+  // encode each segment so spaces, +, & are safe
+  const enc = relPath
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/")
+    .replace(/^%2F/, "/");
   return `${proto}://${host}${enc}`;
 }
 
 /**
- * resolveTenantImageUrl(req, key)
- * 1) Prefer `/assets/metland/<KEY>.png` (as requested)
- * 2) Fallback to your original RAW_MAP if needed
- * Always returns an absolute URL (https://domain/...)
+ * FINAL: resolveTenantImageUrl
+ * - NO PNG GUESSING. We only return a URL if the key exists in RAW_MAP.
  */
 function resolveTenantImageUrl(req, key) {
   if (!key || typeof key !== "string") return null;
-
-  // Preferred path
-  const preferred = toPreferredPath(key);
-  // We can't check file existence in serverless easily; assume you placed files under /public.
-  // Use preferred path directly.
-  let relPath = preferred;
-
-  // If you want to fall back to RAW_MAP when preferred path differs in extension,
-  // uncomment below line to use RAW_MAP ONLY if you know those assets exist:
-  // relPath = RAW_MAP[key] || preferred;
-
+  const k = normalizeKey(key);
+  const relPath = RAW_MAP[k];
+  if (!relPath) return null; // not found in your map
   return toAbsoluteUrl(req, relPath);
 }
 
