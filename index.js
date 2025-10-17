@@ -19,7 +19,9 @@ const {
   PromoProgram,
   Bazaar,
 } = require("./data/metland_data");
+const { resolveTenantImageUrl } = require("./data/metland_images");
 const { keywordResponses } = require("./data/finatra_keywords");
+
 
 // ---------- LINE CONFIGS (2 bots) ----------
 const configFinatra = {
@@ -134,6 +136,7 @@ app.post("/webhook/finatra", line.middleware(configFinatra), async (req, res) =>
 // ======================================================
 // METLAND / MAYA WEBHOOK
 // ======================================================
+
 app.post("/webhook/metland", line.middleware(configMetland), async (req, res) => {
   try {
     const events = req.body.events || [];
@@ -161,7 +164,6 @@ app.post("/webhook/metland", line.middleware(configMetland), async (req, res) =>
           max_tokens: 320,
         });
 
-        // Try parse JSON from model
         let maya = null;
         try {
           const jsonStr = String(raw || "")
@@ -175,31 +177,26 @@ app.post("/webhook/metland", line.middleware(configMetland), async (req, res) =>
         if (!maya || !maya.text) {
           const fallback =
             "Halo! Grand Metropolitan Mall buka jam 10 pagi hingga jam 10 malam. Ada yang bisa saya bantu?";
-          await clientMetland.replyMessage(event.replyToken, {
-            type: "text",
-            text: fallback,
-          });
+          await clientMetland.replyMessage(event.replyToken, { type: "text", text: fallback });
           appendLog("metland", userId, `Bot(fallback): ${fallback}`);
           return;
         }
 
         const replies = [{ type: "text", text: maya.text }];
 
-        // Optional image handling: attach placeholder if image name provided
+        // --- NEW: send the real tenant image straight to LINE ---
         if (maya.image && typeof maya.image === "string") {
-          replies.push({
-            type: "text",
-            text: `Gambar terkait: ${maya.image}`,
-          });
-          replies.push({
-            type: "image",
-            originalContentUrl:
-              "https://via.placeholder.com/1024x768?text=" +
-              encodeURIComponent(maya.image),
-            previewImageUrl:
-              "https://via.placeholder.com/512x384?text=" +
-              encodeURIComponent(maya.image),
-          });
+          const imageUrl = resolveTenantImageUrl(req, maya.image);
+          if (imageUrl) {
+            replies.push({
+              type: "image",
+              originalContentUrl: imageUrl,
+              previewImageUrl: imageUrl,
+            });
+          } else {
+            // keep a small note if mapping missing
+            replies.push({ type: "text", text: `Gambar: ${maya.image}` });
+          }
         }
 
         await clientMetland.replyMessage(event.replyToken, replies);
