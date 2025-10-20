@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
+
 const { chatOpenAI } = require("./utils/openai");
 const { SYSTEM_FINATRA } = require("./prompts/finatra");
 const { buildMayaSystem } = require("./prompts/metland");
@@ -47,6 +48,8 @@ const clientMetland  = new line.Client(configMetland);
 
 // ---------- APP ----------
 const app = express();
+app.enable("trust proxy");
+app.use(express.static(path.join(__dirname, "public")));
 app.get("/", (_req, res) => res.send("OK — Finatra + Metland bots running"));
 
 // ---------- Logging helper ----------
@@ -224,10 +227,14 @@ app.get("/debug/image", (req, res) => {
 
 
 // --------- Export for serverless (Vercel/Cloud Functions) ---------
-module.exports = (req, res) => {
-  app(req, res);
-};
-
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`Listening on http://localhost:${PORT}`);
+  });
+} else {
+  module.exports = app; // for serverless frameworks
+}
 // // Local run:
 // // const PORT = process.env.PORT || 3001;
 // // app.listen(PORT, () => console.log(`Listening on ${PORT}`));
