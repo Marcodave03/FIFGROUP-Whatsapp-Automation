@@ -66,7 +66,7 @@
     // "ATM BCA": "/assets/metland/ATM BCA.jpg",
     "GINO MARIANI": "/assets/metland/GINO-MARIANI.jpg",
     "GIORDANO": "/assets/metland/GIORDANO.jpg",
-    "GOGO KARTING": "/assets/metland/GOGO-KARTING.jpg",
+    "GOGO KARTING": "/assets/metland/GOGO-KARTING.jpeg",
     "GOLDEN LAMIAN": "/assets/metland/GOLDEN-LAMIAN.jpg",
     "GOLDS GYM": "/assets/metland/GOLDS-GYM.jpg",
     "GRAMEDIA": "/assets/metland/GRAMEDIA.jpg",
